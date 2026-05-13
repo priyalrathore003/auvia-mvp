@@ -4,4 +4,5 @@ python-multipart==0.0.9
 librosa==0.10.1
 soundfile==0.12.1
 numpy==1.26.4
-setuptools
+# setuptools intentionally NOT listed here — managed via pip install --upgrade
+# in the Dockerfile to guarantee pkg_resources is present at runtime.
