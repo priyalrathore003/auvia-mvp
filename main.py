@@ -40,31 +40,31 @@ def apply_neural_timbre_correction(audio_path: str, output_path: str):
 
 @app.post("/process-vocal/")
 async def process_vocal(file: UploadFile = File(...)):
-    # 1. Sanitize Filename (Security Fix)
-    safe_filename = f"{uuid.uuid4()}.wav" 
-    input_path = os.path.join(UPLOAD_DIR, f"in_{safe_filename}")
-    output_path = os.path.join(UPLOAD_DIR, f"out_{safe_filename}")
+    # Use the root /tmp directly to avoid nested folder permission issues
+    input_path = f"/tmp/in_{uuid.uuid4()}.wav"
+    output_path = f"/tmp/out_{uuid.uuid4()}.wav"
 
     try:
-        # 2. Async Write
-        content = await file.read()
-        with open(input_path, "wb") as f:
-            f.write(content)
+        # Step 1: Write the uploaded file
+        with open(input_path, "wb") as buffer:
+            buffer.write(await file.read())
+        
+        # Step 2: Immediate check - did the file actually write?
+        if not os.path.exists(input_path):
+            raise Exception("File failed to write to /tmp")
 
-        # 3. Offload Sync Work to Thread (Performance Fix)
-        # This prevents the server from 'freezing' during processing
+        # Step 3: Run the processing
+        # Using the lighter version to guarantee a 'Win' for the demo
         await asyncio.to_thread(apply_neural_timbre_correction, input_path, output_path)
         
-        return FileResponse(path=output_path, filename=f"auvia_enhanced.wav")
+        return FileResponse(path=output_path, filename="auvia_enhanced.wav")
     
     except Exception as e:
-        logger.error(f"Processing Error: {e}")
-        # 4. Obfuscate Internal Errors (Security Fix)
-        raise HTTPException(status_code=500, detail="Internal Audio Processing Error.")
+        logger.error(f"FATAL: {str(e)}")
+        # FOR THIS ONE TIME: Let's see the error again to kill it
+        raise HTTPException(status_code=500, detail=f"Debug Info: {str(e)}")
     
     finally:
-        # 5. Auto-Cleanup (Ops Fix)
+        # Clean up input but keep output for the response
         if os.path.exists(input_path):
             os.remove(input_path)
-        # Note: We keep the output file for the FileResponse, 
-        # but in production, a background task would clear this after 1 hour.
