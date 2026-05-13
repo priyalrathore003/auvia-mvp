@@ -1,0 +1,14 @@
+# Ignore the Python virtual environment
+venv/
+.venv/
+
+# Ignore compiled python code cache folders
+__pycache__/
+
+# Ignore any raw audio uploads or outputs
+*.wav
+*.mp3
+*.m4a
+
+# Ignore macOS system files
+.DS_Store
