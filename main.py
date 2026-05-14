@@ -15,7 +15,7 @@ app = FastAPI(title="Auvia Audio Engine - V1 Core")
 
 def _compute_freq_bins(sr: int, n_fft: int, low_hz: float, high_hz: float):
     """
-    Convert Hz boundaries to STFT bin indices, correctly for any sample rate.
+    Convert Hz boundaries to STFT bin indices for any sample rate.
     Fixes the hardcoded-bin bug that breaks 16kHz / 22kHz voice files.
     """
     bin_width = sr / n_fft
@@ -27,29 +27,42 @@ def _compute_freq_bins(sr: int, n_fft: int, low_hz: float, high_hz: float):
 def apply_neural_timbre_correction(audio_bytes: bytes) -> bytes:
     """
     Core spectral shaping — runs entirely in memory via BytesIO.
-    No /tmp writes, no file-handle cleanup needed.
+    Memory-optimised: intermediates deleted immediately after use
+    to stay within 512MB on Render Starter.
     """
-    # --- Load ---
     input_buffer = io.BytesIO(audio_bytes)
-    # sr=None preserves original sample rate; mono=True keeps memory predictable
-    y, sr = librosa.load(input_buffer, sr=None, mono=True)
-    logger.info(f"Loaded audio: {len(y)/sr:.2f}s @ {sr}Hz")
 
-    # --- Harmonic / Percussive separation ---
+    # sr=22050 halves memory vs native 44.1kHz — fine for vocal processing
+    y, sr = librosa.load(input_buffer, sr=22050, mono=True)
+    logger.info(f"Loaded: {len(y)/sr:.2f}s @ {sr}Hz | peak={np.max(np.abs(y)):.4f}")
+
+    # Harmonic / percussive separation
     y_harm = librosa.effects.harmonic(y, margin=3.0)
+    del y  # free original signal immediately
 
-    # --- Spectral shaping ---
-    N_FFT = 2048
+    # n_fft=1024 quarters STFT matrix size vs 2048
+    N_FFT = 1024
     S = librosa.stft(y_harm, n_fft=N_FFT)
-    S_mag, S_phase = librosa.magphase(S)
+    del y_harm  # free harmonic signal immediately
 
-    # Boost 150–500 Hz (low-mid vocal warmth), calculated per actual sr
+    S_mag, S_phase = librosa.magphase(S)
+    del S  # free full complex STFT immediately
+
+    # Boost 150-500 Hz (low-mid vocal warmth), calculated per actual sr
     low_bin, high_bin = _compute_freq_bins(sr, N_FFT, 150.0, 500.0)
     S_mag[low_bin:high_bin, :] *= 1.5
 
     y_enhanced = librosa.istft(S_mag * S_phase, n_fft=N_FFT)
+    del S_mag, S_phase  # free before normalise + write
 
-    # --- Write to in-memory buffer ---
+    # Peak normalise to -1dBFS
+    # Without this, ISTFT output can be near-zero and PCM_16 writes silence
+    peak = np.max(np.abs(y_enhanced))
+    logger.info(f"Post-ISTFT peak: {peak:.6f}")
+    if peak < 1e-6:
+        raise ValueError("Processing produced silence — input may be corrupt or empty.")
+    y_enhanced = y_enhanced / peak * 0.891  # 0.891 = -1 dBFS headroom
+
     output_buffer = io.BytesIO()
     sf.write(output_buffer, y_enhanced, sr, format="WAV", subtype="PCM_16")
     output_buffer.seek(0)
@@ -66,16 +79,30 @@ async def health():
 @app.post("/process-vocal/")
 async def process_vocal(file: UploadFile = File(...)):
     """
-    Accepts a WAV upload, returns an enhanced WAV via StreamingResponse.
-    All processing is in-memory; no disk I/O, no cleanup race conditions.
+    Accepts WAV / MP3 / FLAC / OGG / M4A upload.
+    Returns enhanced WAV via StreamingResponse.
+    All processing is in-memory — no disk I/O, no cleanup race conditions.
     """
-    if not file.filename.lower().endswith((".wav", ".flac", ".mp3", ".ogg")):
-        raise HTTPException(status_code=415, detail="Unsupported file type.")
+    ALLOWED_EXTENSIONS = (".wav", ".mp3", ".flac", ".ogg", ".m4a")
+    MAX_FILE_MB = 10
+
+    if not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type. Accepted: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+
+    audio_bytes = await file.read()
+
+    if len(audio_bytes) > MAX_FILE_MB * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size on current plan: {MAX_FILE_MB}MB."
+        )
+
+    logger.info(f"Received '{file.filename}' — {len(audio_bytes)/1024:.1f} KB")
 
     try:
-        audio_bytes = await file.read()
-        logger.info(f"Received '{file.filename}' — {len(audio_bytes)/1024:.1f} KB")
-
         processed_bytes = await asyncio.to_thread(
             apply_neural_timbre_correction, audio_bytes
         )
