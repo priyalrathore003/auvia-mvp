@@ -6,7 +6,8 @@ import librosa
 import soundfile as sf
 import noisereduce as nr
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +22,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/demo")
+async def demo():
+    return FileResponse("static/index.html")
 
 def _compute_freq_bins(sr: int, n_fft: int, low_hz: float, high_hz: float):
     """Convert Hz boundaries to STFT bin indices for any sample rate."""
