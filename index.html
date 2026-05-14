@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auvia — AI Vocal Enhancement</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #080807;
+    --surface:      #111110;
+    --border:       #252420;
+    --border-hover: #3A3830;
+    --gold:         #C4943A;
+    --gold-dim:     #8A6420;
+    --gold-glow:    rgba(196,148,58,0.10);
+    --text:         #F0EBE0;
+    --text-muted:   #7A7060;
+    --text-dim:     #4A4540;
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-mono:    'IBM Plex Mono', monospace;
+  }
+
+  html, body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem 1.5rem;
+  }
+
+  .wrapper {
+    width: 100%;
+    max-width: 620px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2.8rem;
+  }
+
+  /* ── Header ── */
+  .header { text-align: center; animation: fadeUp 0.7s ease both; }
+
+  .wordmark {
+    font-family: var(--font-display);
+    font-size: 56px;
+    font-weight: 300;
+    letter-spacing: 0.14em;
+    line-height: 1;
+  }
+  .wordmark em { color: var(--gold); font-style: normal; }
+
+  .tagline {
+    margin-top: 0.5rem;
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* ── Upload ── */
+  #upload-state {
+    width: 100%;
+    animation: fadeUp 0.7s 0.1s ease both;
+    opacity: 0;
+    animation-fill-mode: forwards;
+  }
+
+  .drop-zone {
+    width: 100%;
+    border: 1px dashed var(--border-hover);
+    border-radius: 6px;
+    padding: 3.5rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .drop-zone:hover, .drop-zone.over {
+    border-color: var(--gold-dim);
+    background: var(--gold-glow);
+  }
+
+  .bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+    height: 36px;
+    margin-bottom: 1.4rem;
+  }
+  .bars span {
+    display: block;
+    width: 4px;
+    border-radius: 2px;
+    background: var(--gold-dim);
+    animation: idleBar 1.8s ease-in-out infinite;
+  }
+  .bars span:nth-child(1) { height: 12px; animation-delay: 0.0s; }
+  .bars span:nth-child(2) { height: 20px; animation-delay: 0.1s; }
+  .bars span:nth-child(3) { height: 32px; animation-delay: 0.2s; }
+  .bars span:nth-child(4) { height: 36px; animation-delay: 0.3s; }
+  .bars span:nth-child(5) { height: 28px; animation-delay: 0.4s; }
+  .bars span:nth-child(6) { height: 20px; animation-delay: 0.5s; }
+  .bars span:nth-child(7) { height: 12px; animation-delay: 0.6s; }
+
+  .drop-label strong {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+  }
+  .drop-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.8;
+  }
+  .drop-label .hint {
+    margin-top: 0.8rem;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  #file-input { display: none; }
+
+  .btn-primary {
+    margin-top: 1.25rem;
+    width: 100%;
+    padding: 0.9rem;
+    background: transparent;
+    border: 1px solid var(--gold-dim);
+    border-radius: 3px;
+    color: var(--gold);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .btn-primary:hover { background: var(--gold-glow); border-color: var(--gold); }
+
+  /* ── Processing ── */
+  #processing-state {
+    width: 100%;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .wave-anim {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 56px;
+  }
+  .wave-anim span {
+    display: block;
+    width: 4px;
+    border-radius: 3px;
+    background: var(--gold);
+    animation: liveWave 1.1s ease-in-out infinite;
+  }
+  .wave-anim span:nth-child(odd)  { animation-duration: 1.1s; }
+  .wave-anim span:nth-child(even) { animation-duration: 0.9s; }
+  .wave-anim span:nth-child(1)  { animation-delay: 0.00s; }
+  .wave-anim span:nth-child(2)  { animation-delay: 0.07s; }
+  .wave-anim span:nth-child(3)  { animation-delay: 0.14s; }
+  .wave-anim span:nth-child(4)  { animation-delay: 0.21s; }
+  .wave-anim span:nth-child(5)  { animation-delay: 0.28s; }
+  .wave-anim span:nth-child(6)  { animation-delay: 0.35s; }
+  .wave-anim span:nth-child(7)  { animation-delay: 0.42s; }
+  .wave-anim span:nth-child(8)  { animation-delay: 0.49s; }
+  .wave-anim span:nth-child(9)  { animation-delay: 0.56s; }
+  .wave-anim span:nth-child(10) { animation-delay: 0.63s; }
+  .wave-anim span:nth-child(11) { animation-delay: 0.70s; }
+  .wave-anim span:nth-child(12) { animation-delay: 0.77s; }
+
+  .proc-info { text-align: center; }
+  .proc-status {
+    font-size: 10px;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .proc-file {
+    margin-top: 0.5rem;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .proc-note {
+    margin-top: 1.2rem;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    line-height: 1.8;
+  }
+
+  /* ── Error ── */
+  #error-msg {
+    display: none;
+    width: 100%;
+    padding: 1rem 1.2rem;
+    border: 1px solid rgba(196,80,58,0.35);
+    border-radius: 4px;
+    background: rgba(196,80,58,0.05);
+    font-size: 11px;
+    color: #D07060;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+
+  /* ── Result ── */
+  #result-state {
+    width: 100%;
+    display: none;
+    flex-direction: column;
+    gap: 1.4rem;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .result-title {
+    text-align: center;
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+  }
+  .result-title em { color: var(--gold); font-style: italic; }
+
+  .players {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .pcard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+  .pcard.gold {
+    border-color: var(--gold-dim);
+    background: linear-gradient(150deg,#151410,#111110);
+  }
+
+  .plabel {
+    font-size: 9px;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .pcard.gold .plabel { color: var(--gold-dim); }
+
+  .pname {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  canvas.wv {
+    width: 100%;
+    height: 44px;
+    background: var(--bg);
+    border-radius: 3px;
+    display: block;
+  }
+
+  .pcontrols {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+  }
+
+  .btn-play {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--border-hover);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 10px;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .pcard.gold .btn-play { border-color: var(--gold-dim); color: var(--gold); }
+  .btn-play:hover       { border-color: var(--gold); color: var(--gold); }
+
+  .pbar {
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+  }
+  .pbar-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--text-dim);
+    border-radius: 2px;
+    transition: width 0.1s linear;
+    pointer-events: none;
+  }
+  .pcard.gold .pbar-fill { background: var(--gold-dim); }
+
+  .ptime {
+    font-size: 10px;
+    color: var(--text-dim);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .btn-download {
+    width: 100%;
+    padding: 1rem;
+    background: var(--gold);
+    border: none;
+    border-radius: 3px;
+    color: #080807;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-download:hover { opacity: 0.86; }
+
+  .btn-reset {
+    width: 100%;
+    padding: 0.75rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .btn-reset:hover { border-color: var(--border-hover); color: var(--text-muted); }
+
+  /* ── Footer ── */
+  .footer {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    animation: fadeUp 0.7s 0.2s ease both;
+    opacity: 0;
+    animation-fill-mode: forwards;
+  }
+
+  /* ── Keyframes ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes idleBar {
+    0%,100% { opacity: 0.3; transform: scaleY(0.6); }
+    50%      { opacity: 1;   transform: scaleY(1);   }
+  }
+  @keyframes liveWave {
+    0%,100% { height: 6px;  opacity: 0.5; }
+    50%      { height: 50px; opacity: 1;   }
+  }
+
+  @media (max-width: 480px) {
+    .players      { grid-template-columns: 1fr; }
+    .wordmark     { font-size: 42px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header class="header">
+    <div class="wordmark">A<em>u</em>via</div>
+    <div class="tagline">AI Vocal Enhancement Engine</div>
+  </header>
+
+  <!-- Upload -->
+  <section id="upload-state">
+    <div class="drop-zone" id="drop-zone">
+      <div class="bars">
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+      </div>
+      <div class="drop-label">
+        <strong>Drop your vocal here</strong>
+        Drag & drop or click to browse
+        <div class="hint">WAV · MP3 · FLAC · OGG · M4A &nbsp;·&nbsp; Max 10 MB</div>
+      </div>
+    </div>
+    <input type="file" id="file-input" accept=".wav,.mp3,.flac,.ogg,.m4a,audio/*">
+    <button class="btn-primary" onclick="document.getElementById('file-input').click()">
+      Select File
+    </button>
+  </section>
+
+  <!-- Processing -->
+  <section id="processing-state">
+    <div class="wave-anim">
+      <span></span><span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <div class="proc-info">
+      <div class="proc-status" id="proc-status">Analysing audio...</div>
+      <div class="proc-file"   id="proc-file"></div>
+      <div class="proc-note">
+        Processing on cloud engine<br>
+        Typically 15 – 45 seconds
+      </div>
+    </div>
+  </section>
+
+  <!-- Error -->
+  <div id="error-msg" role="alert"></div>
+
+  <!-- Result -->
+  <section id="result-state">
+    <div class="result-title">Enhancement <em>complete</em></div>
+    <div class="players">
+      <div class="pcard" id="card-orig">
+        <div class="plabel">Original</div>
+        <div class="pname" id="orig-name">—</div>
+        <canvas class="wv" id="cv-orig" width="260" height="44"></canvas>
+        <div class="pcontrols">
+          <button class="btn-play" id="btn-orig">&#9654;</button>
+          <div class="pbar" id="bar-orig"><div class="pbar-fill" id="fill-orig"></div></div>
+          <div class="ptime" id="t-orig">0:00</div>
+        </div>
+        <audio id="aud-orig"></audio>
+      </div>
+      <div class="pcard gold" id="card-enh">
+        <div class="plabel">Enhanced</div>
+        <div class="pname">auvia_enhanced.wav</div>
+        <canvas class="wv" id="cv-enh" width="260" height="44"></canvas>
+        <div class="pcontrols">
+          <button class="btn-play" id="btn-enh">&#9654;</button>
+          <div class="pbar" id="bar-enh"><div class="pbar-fill" id="fill-enh"></div></div>
+          <div class="ptime" id="t-enh">0:00</div>
+        </div>
+        <audio id="aud-enh"></audio>
+      </div>
+    </div>
+    <button class="btn-download" id="btn-dl">&#8659;&nbsp;&nbsp;Download Enhanced WAV</button>
+    <button class="btn-reset" onclick="reset()">Process Another File</button>
+  </section>
+
+  <footer class="footer">auviamusic.com</footer>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const API = 'https://live-mvp-1.onrender.com/process-vocal/';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let origUrl = null, enhUrl = null, currentFile = null;
+
+// ── Elements ──────────────────────────────────────────────────────────────────
+const uploadEl   = document.getElementById('upload-state');
+const procEl     = document.getElementById('processing-state');
+const resultEl   = document.getElementById('result-state');
+const errorEl    = document.getElementById('error-msg');
+const dropZone   = document.getElementById('drop-zone');
+const fileInput  = document.getElementById('file-input');
+const procStatus = document.getElementById('proc-status');
+const procFile   = document.getElementById('proc-file');
+const audOrig    = document.getElementById('aud-orig');
+const audEnh     = document.getElementById('aud-enh');
+const btnOrig    = document.getElementById('btn-orig');
+const btnEnh     = document.getElementById('btn-enh');
+const fillOrig   = document.getElementById('fill-orig');
+const fillEnh    = document.getElementById('fill-enh');
+const tOrig      = document.getElementById('t-orig');
+const tEnh       = document.getElementById('t-enh');
+const btnDl      = document.getElementById('btn-dl');
+
+// ── Status cycling ────────────────────────────────────────────────────────────
+const statuses = [
+  'Analysing audio...',
+  'Removing background noise...',
+  'Shaping spectral profile...',
+  'Boosting vocal warmth...',
+  'Lifting presence...',
+  'Reconstructing waveform...',
+  'Normalising levels...',
+  'Finalising enhancement...',
+];
+let statusTimer = null, statusIdx = 0;
+
+function startStatus() {
+  statusIdx = 0;
+  procStatus.textContent = statuses[0];
+  statusTimer = setInterval(() => {
+    statusIdx = (statusIdx + 1) % statuses.length;
+    procStatus.textContent = statuses[statusIdx];
+  }, 3500);
+}
+function stopStatus() { clearInterval(statusTimer); }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const show = el => el.style.display = 'flex';
+const hide = el => el.style.display = 'none';
+const fmt  = s  => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+
+function showError(msg) {
+  errorEl.textContent = msg;
+  errorEl.style.display = 'block';
+}
+function hideError() { errorEl.style.display = 'none'; }
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+dropZone.addEventListener('click',      () => fileInput.click());
+dropZone.addEventListener('dragover',   e  => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave',  ()  => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop',       e  => {
+  e.preventDefault();
+  dropZone.classList.remove('over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+// ── Main flow ─────────────────────────────────────────────────────────────────
+async function handleFile(file) {
+  currentFile = file;
+  hideError();
+
+  if (file.size > 10 * 1024 * 1024) {
+    showError(`File is ${(file.size/1024/1024).toFixed(1)} MB — max 10 MB on the current plan.`);
+    return;
+  }
+
+  hide(uploadEl);
+  show(procEl);
+  procFile.textContent = file.name;
+  startStatus();
+
+  try {
+    const fd  = new FormData();
+    fd.append('file', file);
+    const res = await fetch(API, { method: 'POST', body: fd });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Engine error ${res.status}: ${txt}`);
+    }
+
+    const enhBlob = await res.blob();
+    stopStatus();
+    await showResult(file, enhBlob);
+
+  } catch (err) {
+    stopStatus();
+    hide(procEl);
+    show(uploadEl);
+    showError(
+      `Processing failed: ${err.message}\n\n` +
+      `If this is the first request in a while, the engine may be waking up — wait 30s and try again.`
+    );
+  }
+}
+
+async function showResult(origFile, enhBlob) {
+  if (origUrl) URL.revokeObjectURL(origUrl);
+  if (enhUrl)  URL.revokeObjectURL(enhUrl);
+
+  origUrl = URL.createObjectURL(origFile);
+  enhUrl  = URL.createObjectURL(enhBlob);
+
+  audOrig.src = origUrl;
+  audEnh.src  = enhUrl;
+
+  document.getElementById('orig-name').textContent = origFile.name;
+
+  await Promise.all([
+    drawWaveform(origFile, 'cv-orig', '#3A3830'),
+    drawWaveform(enhBlob,  'cv-enh',  '#8A6420'),
+  ]);
+
+  hide(procEl);
+  show(resultEl);
+
+  wirePlayer(audOrig, btnOrig, fillOrig, tOrig);
+  wirePlayer(audEnh,  btnEnh,  fillEnh,  tEnh);
+
+  btnDl.onclick = () => {
+    const a = Object.assign(document.createElement('a'), { href: enhUrl, download: 'auvia_enhanced.wav' });
+    a.click();
+  };
+}
+
+// ── Waveform canvas ───────────────────────────────────────────────────────────
+async function drawWaveform(blob, canvasId, color) {
+  const canvas = document.getElementById(canvasId);
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  try {
+    const buf      = await blob.arrayBuffer();
+    const actx     = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded  = await actx.decodeAudioData(buf);
+    await actx.close();
+
+    const data = decoded.getChannelData(0);
+    const cols = Math.floor(W / 3);
+
+    ctx.fillStyle = color;
+    for (let i = 0; i < cols; i++) {
+      const s = Math.floor(i * data.length / cols);
+      const e = Math.floor((i + 1) * data.length / cols);
+      let max = 0;
+      for (let j = s; j < e; j++) { const v = Math.abs(data[j]); if (v > max) max = v; }
+      const bh = Math.max(2, max * H * 0.92);
+      ctx.beginPath();
+      ctx.roundRect(i * 3, (H - bh) / 2, 2, bh, 1);
+      ctx.fill();
+    }
+  } catch {
+    ctx.fillStyle = color;
+    for (let i = 0; i < 80; i++) {
+      const h = 3 + Math.random() * 34;
+      ctx.fillRect(i * (W / 80), (H - h) / 2, 2, h);
+    }
+  }
+}
+
+// ── Player ────────────────────────────────────────────────────────────────────
+function wirePlayer(aud, btn, fill, timeEl) {
+  btn.addEventListener('click', () => {
+    if (aud.paused) { audOrig.pause(); audEnh.pause(); aud.play(); }
+    else aud.pause();
+  });
+  aud.addEventListener('play',        () => { btn.innerHTML = '&#9646;&#9646;'; });
+  aud.addEventListener('pause',       () => { btn.innerHTML = '&#9654;'; });
+  aud.addEventListener('ended',       () => { btn.innerHTML = '&#9654;'; fill.style.width = '0%'; });
+  aud.addEventListener('timeupdate',  () => {
+    if (!aud.duration) return;
+    fill.style.width = (aud.currentTime / aud.duration * 100) + '%';
+    timeEl.textContent = fmt(aud.currentTime);
+  });
+}
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+function reset() {
+  [audOrig, audEnh].forEach(a => { a.pause(); a.src = ''; });
+  [btnOrig, btnEnh].forEach(b => b.innerHTML = '&#9654;');
+  [fillOrig, fillEnh].forEach(f => f.style.width = '0%');
+  [tOrig, tEnh].forEach(t => t.textContent = '0:00');
+  fileInput.value = '';
+  hide(resultEl);
+  hideError();
+  show(uploadEl);
+}
+</script>
+</body>
+</html>
