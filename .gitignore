@@ -1,14 +1,45 @@
-# Ignore the Python virtual environment
-venv/
-.venv/
+# Environment — NEVER commit
+.env
+.env.*
 
-# Ignore compiled python code cache folders
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
 
-# Ignore any raw audio uploads or outputs
+# ChromaDB — local vector store, too large + contains embeddings
+chroma_db/
+
+# Audio temp files — never commit audio data
+/tmp/
 *.wav
 *.mp3
-*.m4a
+*.flac
+*.ogg
+temp_audio/
 
-# Ignore macOS system files
+# macOS
 .DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Docker
+*.log
+
+# Jupyter
+.ipynb_checkpoints/google-cloud-sdk/
+google-cloud-sdk/
+echo "temp_input.wav" >> .gitignore
+echo "*.wav" >> .gitignoretemp_input.wav
+*.wav
