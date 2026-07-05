@@ -1,5 +1,9 @@
 # Auvia Engine 🎵
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Auvia_Engine-7C3AED?style=flat-square)](https://auvia-engine-754304552652.asia-south1.run.app)
+
+**[→ Try the live demo](https://auvia-engine-754304552652.asia-south1.run.app)**
+
 **Agentic audio intelligence backend for independent musicians.**
 
 An AI agent that accepts a natural-language instruction + WAV audio, reasons about audio issues using a RAG knowledge base, runs a DSP enhancement pipeline, and returns professionally processed audio — all without raw audio bytes ever crossing the LLM boundary.
